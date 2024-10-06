@@ -96,18 +96,28 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
     // get detailf from req.body
-    const { email, username, password } = req.body
+    const { email, userName, password } = req.body
     // Email based login or userName based login
-    if (!email && !username) {
-        throw new ApiError(400, "Email or Username is required")
+    if (!email && !userName) {
+        throw new ApiError(400, "Email and Username is required")
     }
-    // if (!(email || username)) {
-    //     throw new ApiError(400, "Email or Username is required")
+
+    // Same logic as og above code
+    // if (!(email || userName)) {
+    //     throw new ApiError(400, "Email or Username is required");
     // }
 
+    if (!password) {
+        throw new ApiError(400, "Password is required");
+    }
+
     // Find user
+    // Find user by email or username, and make it case insensitive for email
     const user = await User.findOne({
-        $or: [{ email }, { username }]
+        $or: [
+            { email },
+            { userName }
+        ]
     })
 
     if (!user) {
@@ -123,6 +133,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
     // access and refresh token
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id)
+    // console.log("From Login User ->", refreshToken)
 
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
 
@@ -131,6 +142,7 @@ const loginUser = asyncHandler(async (req, res) => {
         httpOnly: true,  // the cookie is only modifiable by the server, not by the client-side JavaScript. However, the client (browser) can still view and send the cookie back to the server during HTTP requests.
         secure: true,  // Only sent over HTTPS
     }
+
 
     return res.status(200)
         .cookie("accessToken", accessToken, cookieOption)
