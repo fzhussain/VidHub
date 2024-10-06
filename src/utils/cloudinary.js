@@ -16,10 +16,12 @@ const uploadOnCloudinary = async (localFilePath) => {
         const uploadResult = await cloudinary.uploader.upload(localFilePath, {
             resource_type: 'auto',
         })
-        console.log(`File ${localFilePath} have been uploaded successfully! Public cloudinary URL: ${uploadResult.url}`)
+        // console.log(`File ${localFilePath} have been uploaded successfully! Public cloudinary URL: ${uploadResult.url}`)
+        fs.unlinkSync(localFilePath)  // Successful upload: File is deleted because it’s no longer needed locally
+        // console.log("Cloudinary Response ->", uploadResult)
         return uploadResult
     } catch {
-        fs.unlinkSync(localFilePath)  // remove the locally saved temperary file as the upload operation got failed
+        fs.unlinkSync(localFilePath)  // Unsuccessful upload: File is deleted to avoid clutter, even though the upload failed. This approach ensures effective resource management and avoids filling up disk space unnecessarily.
         return null
     }
 }

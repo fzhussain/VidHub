@@ -8,21 +8,21 @@ const registerUser = asyncHandler(async (req, res) => {
     // Get user details from frontend
 
     const { userName, email, fullName, avatar, coverImage, password } = req.body
-    console.log("Request body ->", userName, email, fullName, avatar, coverImage, password)
+    // console.log("Request body ->", req.body)
 
     // Validation - not empty
     // if (fullName === "") {
     //     throw new ApiError(400, "Full name is required")
     // }
     if (
-        [userName, email, fullName, avatar, coverImage, password].some((field) => field?.trim() === "")
+        [userName, email, fullName, avatar, password].some((field) => field?.trim() === "")
     ) {
         throw new ApiError(400, "All Fields are compulsory")
     }
 
     // Check if user already exists  - username, email
 
-    const exitingUser = User.findOne({
+    const exitingUser = await User.findOne({
         $or: [{ userName }, { email }]
     })
 
@@ -31,8 +31,13 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 
     // Check for images, avatar
+    // console.log("Request files ->", req.files)
     const avatarLocalPath = req.files?.avatar[0]?.path
-    const coverImageLocalPath = req.files?.coverImage[0]?.path
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path
+    let coverImageLocalPath
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path
+    }
 
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avatar file is required")
@@ -48,7 +53,7 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 
     // Create user object and Create entry in Database
-    const user = User.create({
+    const user = await User.create({
         userName: userName.toLowerCase(),
         email,
         fullName,
