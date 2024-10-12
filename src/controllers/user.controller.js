@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import { User } from "../models/user.model.js"
-import { uploadOnCloudinary } from "../utils/cloudinary.js"
+import { uploadOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 
@@ -243,7 +243,7 @@ const changeUserPassword = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid old password")
     }
 
-    user.passoword = newPassword
+    user.password = newPassword
     await user.save({ validateBeforeSave: false })
 
     return res
@@ -252,29 +252,67 @@ const changeUserPassword = asyncHandler(async (req, res) => {
 })
 
 const getCurrentUser = asyncHandler(async (req, res) => {
-    return res.status(200).json(200, req.user, "Current user fetched successfully")
+    return res
+        .status(200)
+        .json(new ApiResponse(200, req.user, "Current user fetched successfully"))
 })
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
     const { fullName, email } = req.body
-    if (!fullName || !email) {
-        throw new ApiError(400, "All fields are required")
+    // Ensure that at least one of fullName or email is provided
+    if (!fullName && !email) {
+        throw new ApiError(400, "Please provide either a new fullName or email.");
     }
 
-    const user = await User.findByIdAndUpdate(
-        req.user?._id,
-        {
-            $set: {
-                fullName,
-                email: email,
-            }
-        },
-        { new: true }
-    ).select("-password")
+    try {
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, user, "Account details updated successfully"))
+        // Fetch the current user details
+        const currentUser = await User.findById(req.user?._id).select("fullName email");
+
+        if (!currentUser) {
+            throw new ApiError(404, "User not found");
+        }
+
+        // Check if both fullName and email are provided and both are the same as the current values
+        if (fullName === currentUser.fullName && email === currentUser.email) {
+            return res.status(200).json(new ApiResponse(200, currentUser, "No changes were made. Both fullName and email are already the same."));
+        }
+
+        // Check if the provided fullName is the same as the current one
+        if (fullName && fullName === currentUser.fullName) {
+            return res.status(200).json(new ApiResponse(200, currentUser, "No changes were made. The fullName is already the same."));
+        }
+
+        // Check if the provided email is the same as the current one
+        if (email && email === currentUser.email) {
+            return res.status(200).json(new ApiResponse(200, currentUser, "No changes were made. The email is already the same."));
+        }
+
+        // Build the update object based on the provided fields
+        const updateFields = {};
+        if (fullName) updateFields.fullName = fullName;
+        if (email) updateFields.email = email;
+
+        const user = await User.findByIdAndUpdate(
+            req.user?._id,
+            { $set: updateFields },
+            { new: true }
+        ).select("-password")
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, user, "Account details updated successfully"))
+    } catch (error) {
+        // Check if the error is a Mongo duplicate key error
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+            throw new ApiError(400, "Email already in use. Please choose a different email.");
+        }
+
+        // If the error is something else, rethrow it to be handled by your asyncHandler middleware
+        throw new ApiError(500, "An error occurred while updating account details");
+    }
+
+
 })
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
@@ -290,6 +328,12 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error while updating avatar")
     }
 
+    // Fetch the current user with the old avatar URL
+    const currentUser = await User.findById(req.user?._id)
+
+    // Store the old avatar URL (if any) to delete later
+    const oldAvatarUrl = currentUser.avatar
+
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
@@ -299,6 +343,14 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         },
         { new: true }
     ).select("-password")
+
+    // TODO: Delete old image
+    if (oldAvatarUrl) {
+        // Extract public ID from the old URL for Cloudinary deletion
+        const publicId = extractPublicIdFromCloudinaryUrl(oldAvatarUrl);
+        console.log("publicId ->", publicId)
+        await deleteFromCloudinary(publicId);
+    }
 
     return res.
         status(200)
@@ -321,6 +373,12 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error while updating Cover image")
     }
 
+    // Fetch the current user with the old avatar URL
+    const currentUser = await User.findById(req.user?._id)
+
+    // Store the old avatar URL (if any) to delete later
+    const oldCoverImageUrl = currentUser.coverImage
+
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
@@ -331,6 +389,13 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         { new: true }
     ).select("-password")
 
+    if (oldCoverImageUrl) {
+        // Extract public ID from the old URL for Cloudinary deletion
+        const publicId = extractPublicIdFromCloudinaryUrl(oldCoverImageUrl);
+        console.log("publicId ->", publicId)
+        await deleteFromCloudinary(publicId);
+    }
+
     return res.
         status(200)
         .json(
@@ -338,6 +403,88 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         )
 })
 
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { userName } = req.params
+
+    if (!userName?.trim()) {
+        throw new ApiError(400, "Username is missing!")
+    }
+  
+    const channel = await User.aggregate([
+        {
+            $match: {
+                userName: userName.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                userName: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+            }
+        }
+    ]);
+
+    // const channel = await User.aggregate([
+    //     {
+    //         $match: {
+    //             username: username.toLowerCase()
+    //         }
+    //     }
+    // ])
+
+    console.log("channel ->", channel)
+
+    if (!channel?.length) {
+        throw new ApiError(404, "Channel doesnot exists")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, channel[0], "User channel fetched successfully!")
+    )
+
+})
 export {
     registerUser,
     loginUser,
@@ -345,6 +492,8 @@ export {
     refreshAccessToken,
     changeUserPassword,
     getCurrentUser,
+    updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile
 }

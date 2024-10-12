@@ -27,4 +27,33 @@ const uploadOnCloudinary = async (localFilePath) => {
 }
 
 
-export { uploadOnCloudinary }
+const extractPublicIdFromCloudinaryUrl = (url) => {
+    if (!url) return null;  // Ensure URL is valid
+    try {
+        const parts = url.split('/');
+        const publicIdWithExtension = parts[parts.length - 1];  // Get the last part of the URL
+        const publicId = publicIdWithExtension.split('.')[0];    // Extract the public ID
+        return publicId;
+    } catch (error) {
+        console.error("Error while extracting public ID:", error);
+        return null;
+    }
+}
+
+const deleteFromCloudinary = async (publicId) => {
+    if (!publicId) return null;  // Ensure public ID is valid
+    try {
+        const result = await cloudinary.uploader.destroy(publicId);  // Use destroy method
+        console.log(`File with public ID ${publicId} has been deleted from Cloudinary.`);
+        return result;
+    } catch (error) {
+        console.error("Failed to delete from Cloudinary:", error);
+        throw new ApiError(500, "Error while deleting from Cloudinary");
+    }
+};
+
+export {
+    uploadOnCloudinary,
+    extractPublicIdFromCloudinaryUrl,
+    deleteFromCloudinary
+}
