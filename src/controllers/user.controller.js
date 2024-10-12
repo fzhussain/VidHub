@@ -1,6 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import { User } from "../models/user.model.js"
+import { Subscription } from "../models/subscription.model.js"
 import { uploadOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
@@ -464,16 +465,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         }
     ]);
 
-    // const channel = await User.aggregate([
-    //     {
-    //         $match: {
-    //             username: username.toLowerCase()
-    //         }
-    //     }
-    // ])
-
-    console.log("channel ->", channel)
-
     if (!channel?.length) {
         throw new ApiError(404, "Channel doesnot exists")
     }
@@ -485,6 +476,123 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     )
 
 })
+
+const toggleSubscription = asyncHandler(async (req, res) => {
+    const { subscribe } = req.body
+    const channelId = req.params.channelId // Get the channelId from the params
+
+    // Check if subscribe field is provided in the request body
+    if (subscribe === undefined) {
+        throw new ApiError(400, "Please provide subscribe: true or subscribe: false in the body.")
+    }
+
+    // Check if the logged-in user is trying to subscribe to their own channel
+    if (channelId === req.user.userName.toString()) {
+        throw new ApiError(400, "You cannot subscribe to your own channel.")
+    }
+
+    // Check if the channel exists
+    const channel = await User.findOne({userName: channelId})
+    if (!channel) {
+        throw new ApiError(404, "Channel not found.")
+    }
+
+    // Handle subscribe: true (Subscribe)
+    if (subscribe === true) {
+        // Check if the user is already subscribed
+        const existingSubscription = await Subscription.findOne({
+            subscriber: req.user._id,
+            channel: channel._id
+        });
+
+        if (existingSubscription) {
+            throw new ApiError(400, "You are already subscribed to this channel.");
+        }
+
+        // Create a new subscription
+        const newSubscription = await Subscription.create({
+            subscriber: req.user._id,
+            channel: channel._id
+        });
+
+        return res.status(201).json(
+            new ApiResponse(201, { subscription: newSubscription }, "Successfully subscribed to the channel!")
+        );
+
+    } else if (subscribe === false) {
+        // Handle subscribe: false (Unsubscribe)
+        const existingSubscription = await Subscription.findOne({
+            subscriber: req.user._id,
+            channel: channel._id
+        });
+
+        if (!existingSubscription) {
+            throw new ApiError(400, "You are not subscribed to this channel.");
+        }
+
+        // Remove the subscription
+        await existingSubscription.deleteOne();
+
+        return res.status(200).json(
+            new ApiResponse(200, {}, "Successfully unsubscribed from the channel.")
+        );
+    } else {
+        throw new ApiError(400, "Invalid value for subscribe. Use true or false.");
+    }
+})
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        }, 
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                $project: {
+                                    fullName: 1,
+                                    userName: 1,
+                                    avatar: 1
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200, 
+            user[0].watchHistory,
+            "Watch History Fetched Successfully"
+        )
+    )
+})
+
 export {
     registerUser,
     loginUser,
@@ -495,5 +603,7 @@ export {
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
-    getUserChannelProfile
+    getUserChannelProfile,
+    toggleSubscription,
+    getWatchHistory
 }
