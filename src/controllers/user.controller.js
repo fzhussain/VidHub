@@ -5,6 +5,7 @@ import { Subscription } from "../models/subscription.model.js"
 import { uploadOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteFromCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose"
 
 const generateAccessAndRefreshTokens = async (userID) => {
     try {
@@ -562,10 +563,12 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                             foreignField: "_id",
                             as: "owner",
                             pipeline: [
-                                $project: {
+                                {
+                                    $project: {
                                     fullName: 1,
                                     userName: 1,
                                     avatar: 1
+                                    }
                                 }
                             ]
                         }
