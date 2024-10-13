@@ -160,8 +160,8 @@ const logOutUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -412,7 +412,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     if (!userName?.trim()) {
         throw new ApiError(400, "Username is missing!")
     }
-  
+
     const channel = await User.aggregate([
         {
             $match: {
@@ -471,10 +471,10 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     }
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, channel[0], "User channel fetched successfully!")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, channel[0], "User channel fetched successfully!")
+        )
 
 })
 
@@ -493,7 +493,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     }
 
     // Check if the channel exists
-    const channel = await User.findOne({userName: channelId})
+    const channel = await User.findOne({ userName: channelId })
     if (!channel) {
         throw new ApiError(404, "Channel not found.")
     }
@@ -548,7 +548,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
             $match: {
                 _id: new mongoose.Types.ObjectId(req.user._id)
             }
-        }, 
+        },
         {
             $lookup: {
                 from: "videos",
@@ -565,9 +565,9 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                             pipeline: [
                                 {
                                     $project: {
-                                    fullName: 1,
-                                    userName: 1,
-                                    avatar: 1
+                                        fullName: 1,
+                                        userName: 1,
+                                        avatar: 1
                                     }
                                 }
                             ]
@@ -586,14 +586,14 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     ])
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(
-            200, 
-            user[0].watchHistory,
-            "Watch History Fetched Successfully"
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                user[0].watchHistory,
+                "Watch History Fetched Successfully"
+            )
         )
-    )
 })
 
 export {
