@@ -4,7 +4,7 @@ import {User} from "../models/user.model.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
-import {uploadPhotoOnCloudinary} from "../utils/cloudinary.js"
+import {uploadPhotoOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteImageFromCloudinary, uploadVideoOnCloudinary, deleteVideoFromCloudinary} from "../utils/cloudinary.js"
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
@@ -21,13 +21,37 @@ const publishAVideo = asyncHandler(async (req, res) => {
     if (!description) throw new ApiError(400, "Description is Required");
 
     const videoFileLocalFilePath = req.files?.videoFile?.[0]?.path;
+    console.log("videoFileLocalFilePath -> ", videoFileLocalFilePath)
     if (!videoFileLocalFilePath) throw new ApiError(400, "Video File Must be Required");
 
     const thumbnailLocalFilePath = req.files?.thumbnail?.[0]?.path;
+    console.log("videoFileLocalFilePath -> ", videoFileLocalFilePath)
     if (!thumbnailLocalFilePath) throw new ApiError(400, "Thumbnail File Must be Required");
 
+    // Upload thumbnail to Cloudinary
+    const thumbnailFileUpload = await uploadPhotoOnCloudinary(thumbnailLocalFilePath);
+    if (!thumbnailFileUpload) throw new ApiError(500, "Error while uploading thumbnail file");
 
+    // Upload video to Cloudinary
+    const videoFileUpload = await uploadVideoOnCloudinary(videoFileLocalFilePath)
+    if (!videoFileUpload) throw new ApiError(500, "Error while Uploading Video File")
+    
+    // Ensure video duration is available
+    const videoDuration = videoFileUpload.duration;
+    if (!videoDuration) throw new ApiError(500, "Video duration is missing from Cloudinary response");
 
+    const video = await Video.create({
+        videoFile: videoFileUpload.secure_url,
+        title,
+        description: description || "No description provided",
+        duration: videoDuration,
+        thumbnail: thumbnailFileUpload.secure_url,
+        owner: req.user?._id,
+      });
+
+    if (!video) throw new ApiError(500, "Error while publishing video");
+
+    return res.status(200).json(new ApiResponse(200, video, "Video published successfully"));
 
 })
 

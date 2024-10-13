@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
+import {ApiError} from "./ApiError.js"
 
 // Configuration
 cloudinary.config({
@@ -50,16 +51,127 @@ const deleteImageFromCloudinary = async (publicId) => {
             resource_type: "image",
             }
         );  // Use destroy method
-        console.log(`File with public ID ${publicId} has been deleted from Cloudinary.`);
+        console.log(`Image with public ID ${publicId} has been deleted from Cloudinary.`);
         return result;
     } catch (error) {
-        console.error("Failed to delete from Cloudinary:", error);
-        throw new ApiError(500, "Error while deleting from Cloudinary");
+        console.error("Failed to delete image from Cloudinary:", error);
+        throw new ApiError(500, "Error while deleting image from Cloudinary");
     }
 };
+
+
+const uploadVideoOnCloudinary = async (localFilePath) => {
+    try {
+        if (!localFilePath) return null
+        console.log("uploading video...");
+
+        // Upload the file cloudinary
+        // upload -> supports uploading of file upto 100MB
+        // const uploadResult = await cloudinary.uploader.upload(localFilePath, {
+        //     resource_type: 'video',
+        //     folder: "FZtube/videos"
+        // })
+        const uploadResult = await new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_large(localFilePath, {
+                resource_type: 'video',
+                folder: "FZtube/videos",
+                chunk_size: 6000000, // 6MB chunks
+                timeout: 600000, // Increased timeout to 10 minutes
+            }, (error, result) => {
+                if (error) {
+                    console.log("CLOUDINARY :: FILE UPLOAD ERROR ", error.message)
+                    reject(error)
+                } else {
+                    // console.log("> Result:", result.secure_url)
+                    resolve(result)
+                    // console.log("cloudinary video file", result);
+                }
+                
+            })
+        }
+        ) 
+        console.log("Cloudinary Response after uploading a video ->", uploadResult)
+        fs.unlinkSync(localFilePath, (unlinkError) => {
+            if (unlinkError) console.log("Error deleting local file:", unlinkError);
+        })
+        return uploadResult
+    } catch {
+        console.log("CLOUDINARY :: FILE UPLOAD ERROR ", error);
+        fs.unlinkSync(localFilePath)
+        return null
+    }
+}
+
+// const uploadVideoOnCloudinary = async (localFilePath) => {
+//     try {
+//       if (!localFilePath) return null;
+  
+//       console.log("uploading video...");
+  
+//       return new Promise((resolve, reject) => {
+//         cloudinary.uploader.upload_large(localFilePath, {
+//           resource_type: "video",
+//           folder: "FZtube/videos",
+//           chunk_size: 6000000, // 6MB chunks
+//           eager: [
+//             {
+//               streaming_profile: "hd",
+//               format: "m3u8", // HLS format
+//             },
+//           ],
+//           timeout: 600000, // Increased timeout to 10 minutes
+//         }, (error, result) => {
+//           if (error) {
+//             console.log("CLOUDINARY :: FILE UPLOAD ERROR ", error.message);
+//             reject(error);
+//           } else {
+//             console.log("cloudinary video file", result);
+            
+//             const hlsurl = result.eager?.[0]?.secure_url;
+            
+//             if (!hlsurl) {
+//               console.log("HLS URL not found in Cloudinary response");
+//               reject(new Error("HLS URL not generated"));
+//             } else {
+//               resolve({ ...result, hlsurl });
+//             }
+//           }
+  
+//           // Clean up local file after upload attempt
+//           fs.unlink(localFilePath, (unlinkError) => {
+//             if (unlinkError) console.log("Error deleting local file:", unlinkError);
+//           });
+//         });
+//       });
+//     } catch (error) {
+//       console.log("CLOUDINARY :: FILE UPLOAD ERROR ", error);
+//       return null;
+//     }
+//   };
+
+const deleteVideoFromCloudinary = async (publicId) => {
+    if (!publicId) return null;  // Ensure public ID is valid
+    try {
+        const result = await cloudinary.uploader.destroy(
+            `FZtube/videos/${publicId}`, 
+            {
+            resource_type: "video",
+            }
+        );  // Use destroy method
+        console.log(`Video with public ID ${publicId} has been deleted from Cloudinary.`);
+        return result;
+    } catch (error) {
+        console.error("Failed to delete video from Cloudinary:", error);
+        throw new ApiError(500, "Error while deleting video from Cloudinary");
+    }
+};
+
+
 
 export {
     uploadPhotoOnCloudinary,
     extractPublicIdFromCloudinaryUrl,
-    deleteImageFromCloudinary
+    deleteImageFromCloudinary,
+    uploadVideoOnCloudinary,
+    deleteVideoFromCloudinary
 }

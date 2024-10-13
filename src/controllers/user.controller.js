@@ -350,12 +350,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         { new: true }
     ).select("-password")
 
-    // TODO: Delete old image
     if (oldAvatarUrl) {
         // Extract public ID from the old URL for Cloudinary deletion
-        console.log("oldAvatarUrl ->", oldAvatarUrl)
         const publicId = extractPublicIdFromCloudinaryUrl(oldAvatarUrl);
-        console.log("publicId ->", publicId)
         await deleteImageFromCloudinary(publicId);
     }
 
@@ -399,7 +396,6 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     if (oldCoverImageUrl) {
         // Extract public ID from the old URL for Cloudinary deletion
         const publicId = extractPublicIdFromCloudinaryUrl(oldCoverImageUrl);
-        console.log("publicId ->", publicId)
         await deleteImageFromCloudinary(publicId);
     }
 
