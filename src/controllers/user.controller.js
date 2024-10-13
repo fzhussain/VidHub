@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
 import { User } from "../models/user.model.js"
 import { Subscription } from "../models/subscription.model.js"
-import { uploadOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteFromCloudinary } from "../utils/cloudinary.js"
+import { uploadPhotoOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteImageFromCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import mongoose from "mongoose"
@@ -50,8 +50,12 @@ const registerUser = asyncHandler(async (req, res) => {
 
     // Check for images, avatar
     // console.log("Request files ->", req.files)
-    const avatarLocalPath = req.files?.avatar[0]?.path
+    // const avatarLocalPath = req.files?.avatar[0]?.path
     // const coverImageLocalPath = req.files?.coverImage[0]?.path
+    let avatarLocalPath
+    if (req.files && Array.isArray(req.files.avatar) && req.files.avatar.length > 0) {
+        avatarLocalPath = req.files.avatar[0].path
+    }
     let coverImageLocalPath
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path
@@ -63,8 +67,8 @@ const registerUser = asyncHandler(async (req, res) => {
 
 
     // Upload on cloudinary - avatar
-    const avatarUpload = await uploadOnCloudinary(avatarLocalPath)
-    const coverImageUpload = await uploadOnCloudinary(coverImageLocalPath)
+    const avatarUpload = await uploadPhotoOnCloudinary(avatarLocalPath)
+    const coverImageUpload = await uploadPhotoOnCloudinary(coverImageLocalPath)
 
     if (!avatarUpload) {
         throw new ApiError(400, "Avatar image to upload on Cloudinary is required")
@@ -324,7 +328,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar file is missing")
     }
 
-    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const avatar = await uploadPhotoOnCloudinary(avatarLocalPath)
 
     if (!avatar.url) {
         throw new ApiError(400, "Error while updating avatar")
@@ -349,15 +353,16 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     // TODO: Delete old image
     if (oldAvatarUrl) {
         // Extract public ID from the old URL for Cloudinary deletion
+        console.log("oldAvatarUrl ->", oldAvatarUrl)
         const publicId = extractPublicIdFromCloudinaryUrl(oldAvatarUrl);
         console.log("publicId ->", publicId)
-        await deleteFromCloudinary(publicId);
+        await deleteImageFromCloudinary(publicId);
     }
 
     return res.
         status(200)
         .json(
-            new ApiResponse(200, user, "Cover Image updated successfully!")
+            new ApiResponse(200, user, "Avatar updated successfully!")
         )
 
 })
@@ -369,7 +374,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Cover Image file is missing")
     }
 
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    const coverImage = await uploadPhotoOnCloudinary(coverImageLocalPath)
 
     if (!coverImage.url) {
         throw new ApiError(400, "Error while updating Cover image")
@@ -395,7 +400,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         // Extract public ID from the old URL for Cloudinary deletion
         const publicId = extractPublicIdFromCloudinaryUrl(oldCoverImageUrl);
         console.log("publicId ->", publicId)
-        await deleteFromCloudinary(publicId);
+        await deleteImageFromCloudinary(publicId);
     }
 
     return res.
@@ -551,10 +556,10 @@ const getWatchHistory = asyncHandler(async (req, res) => {
         },
         {
             $lookup: {
-                from: "videos",
-                localField: "watchHistory",
-                foreignField: "_id",
-                as: "watchHistory",
+                from: "videos",  // The collection where videos are stored
+                localField: "watchHistory",  // User's watch history (array of video IDs)
+                foreignField: "_id",  // Matching videos by their _id in the videos collection
+                as: "watchHistory",  // Name for the joined data (the resulting array)
                 pipeline: [
                     {
                         $lookup: {

@@ -9,12 +9,13 @@ cloudinary.config({
 });
 
 
-const uploadOnCloudinary = async (localFilePath) => {
+const uploadPhotoOnCloudinary = async (localFilePath) => {
     try {
         if (!localFilePath) return null
         // Upload the file cloudinary
         const uploadResult = await cloudinary.uploader.upload(localFilePath, {
             resource_type: 'auto',
+            folder: "FZtube/photos",
         })
         // console.log(`File ${localFilePath} have been uploaded successfully! Public cloudinary URL: ${uploadResult.url}`)
         fs.unlinkSync(localFilePath)  // Successful upload: File is deleted because it’s no longer needed locally
@@ -40,10 +41,15 @@ const extractPublicIdFromCloudinaryUrl = (url) => {
     }
 }
 
-const deleteFromCloudinary = async (publicId) => {
+const deleteImageFromCloudinary = async (publicId) => {
     if (!publicId) return null;  // Ensure public ID is valid
     try {
-        const result = await cloudinary.uploader.destroy(publicId);  // Use destroy method
+        const result = await cloudinary.uploader.destroy(
+            `FZtube/photos/${publicId}`, 
+            {
+            resource_type: "image",
+            }
+        );  // Use destroy method
         console.log(`File with public ID ${publicId} has been deleted from Cloudinary.`);
         return result;
     } catch (error) {
@@ -53,7 +59,7 @@ const deleteFromCloudinary = async (publicId) => {
 };
 
 export {
-    uploadOnCloudinary,
+    uploadPhotoOnCloudinary,
     extractPublicIdFromCloudinaryUrl,
-    deleteFromCloudinary
+    deleteImageFromCloudinary
 }
