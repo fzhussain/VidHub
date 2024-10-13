@@ -12,4 +12,4 @@ This project was created in collaboration with the YouTuber **Chai aur Code** to
   - Implementing RESTful APIs.
   - Handling databases and middleware.
 
-[Database Model] (https://app.eraser.io/workspace/YtPqZ1VogxGy1jzIDkzj)
+[Database Model](https://app.eraser.io/workspace/YtPqZ1VogxGy1jzIDkzj)
