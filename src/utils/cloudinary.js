@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
-import {ApiError} from "./ApiError.js"
+import { ApiError } from "./ApiError.js"
 
 // Configuration
 cloudinary.config({
@@ -46,9 +46,9 @@ const deleteImageFromCloudinary = async (publicId) => {
     if (!publicId) return null;  // Ensure public ID is valid
     try {
         const result = await cloudinary.uploader.destroy(
-            `FZtube/photos/${publicId}`, 
+            `FZtube/photos/${publicId}`,
             {
-            resource_type: "image",
+                resource_type: "image",
             }
         );  // Use destroy method
         console.log(`Image with public ID ${publicId} has been deleted from Cloudinary.`);
@@ -86,11 +86,11 @@ const uploadVideoOnCloudinary = async (localFilePath) => {
                     resolve(result)
                     // console.log("cloudinary video file", result);
                 }
-                
+
             })
         }
-        ) 
-        console.log("Cloudinary Response after uploading a video ->", uploadResult)
+        )
+        // console.log("Cloudinary Response after uploading a video ->", uploadResult)
         fs.unlinkSync(localFilePath, (unlinkError) => {
             if (unlinkError) console.log("Error deleting local file:", unlinkError);
         })
@@ -105,9 +105,9 @@ const uploadVideoOnCloudinary = async (localFilePath) => {
 // const uploadVideoOnCloudinary = async (localFilePath) => {
 //     try {
 //       if (!localFilePath) return null;
-  
+
 //       console.log("uploading video...");
-  
+
 //       return new Promise((resolve, reject) => {
 //         cloudinary.uploader.upload_large(localFilePath, {
 //           resource_type: "video",
@@ -126,9 +126,9 @@ const uploadVideoOnCloudinary = async (localFilePath) => {
 //             reject(error);
 //           } else {
 //             console.log("cloudinary video file", result);
-            
+
 //             const hlsurl = result.eager?.[0]?.secure_url;
-            
+
 //             if (!hlsurl) {
 //               console.log("HLS URL not found in Cloudinary response");
 //               reject(new Error("HLS URL not generated"));
@@ -136,7 +136,7 @@ const uploadVideoOnCloudinary = async (localFilePath) => {
 //               resolve({ ...result, hlsurl });
 //             }
 //           }
-  
+
 //           // Clean up local file after upload attempt
 //           fs.unlink(localFilePath, (unlinkError) => {
 //             if (unlinkError) console.log("Error deleting local file:", unlinkError);
@@ -153,9 +153,9 @@ const deleteVideoFromCloudinary = async (publicId) => {
     if (!publicId) return null;  // Ensure public ID is valid
     try {
         const result = await cloudinary.uploader.destroy(
-            `FZtube/videos/${publicId}`, 
+            `FZtube/videos/${publicId}`,
             {
-            resource_type: "video",
+                resource_type: "video",
             }
         );  // Use destroy method
         console.log(`Video with public ID ${publicId} has been deleted from Cloudinary.`);
