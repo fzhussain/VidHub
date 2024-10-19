@@ -58,6 +58,51 @@ const publishAVideo = asyncHandler(async (req, res) => {
 const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: get video by id
+    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid video id");
+
+    const video = await Video.findById(videoId);
+    if (!video) throw new ApiError(400, "Video not found");
+
+    // Check if the video is published
+    if (!video.isPublished) {
+        throw new ApiError(403, "This video is not published and cannot be viewed");
+    }
+
+    let watchHistory;
+    if (req.user) {
+        // Check if the video is already in the user's watch history
+        const user = await User.findById(req.user._id);
+        const isAlreadyInHistory = user.watchHistory?.some(
+            (videoInHistory) => videoInHistory.toString() === videoId
+        );
+        // If the video is not in the history, add it and increment views
+        if (!isAlreadyInHistory) {
+            watchHistory = await User.findByIdAndUpdate(
+                req.user._id,
+                {
+                    $push: { watchHistory: new mongoose.Types.ObjectId(videoId) },
+                },
+                { new: true }
+            );
+
+            if (!watchHistory) {
+                throw new ApiError(400, "Error occurred while adding to watch history");
+            }
+
+            // Increment video views
+            video.views += 1;
+            const updatedVideo = await video.save();
+            if (!updatedVideo) {
+                throw new ApiError(400, "Error occurred while updating video views");
+            }
+        }
+
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, video, "Video fetched successfully! View updated and added to user's watch history (if new)")
+    );
+
 })
 
 const updateVideo = asyncHandler(async (req, res) => {
