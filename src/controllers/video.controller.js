@@ -67,46 +67,67 @@ const updateVideo = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid video id");
     }
 
+    // Find the video to verify ownership
+    const video = await Video.findById(videoId);
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    // Check if the user is the owner of the video
+    if (String(video.owner) !== String(req.user._id)) {
+        throw new ApiError(403, "You are not allowed to update this video");
+    }
+
     const { title, description } = req.body;
 
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-        throw new ApiError(400, "Invalid title");
+    // Create an object to store updates
+    const updateFields = {};
+
+    // If the title is provided and valid, update it
+    if (title && typeof title === 'string' && title.trim() !== '') {
+        updateFields.title = title;
     }
 
-    if (!description || typeof description !== "string" || description.trim == '') {
-        throw new ApiError(400, "Invalid description");
+    // If the description is provided and valid, update it
+    if (description && typeof description === 'string' && description.trim() !== '') {
+        updateFields.description = description;
     }
 
-    const thumbnailLocalPath = req.file?.path;
-    if (!thumbnailLocalPath) {
-        throw new ApiError(400, "Thumbnail file is required");
+    // Handle the thumbnail update if provided
+    const oldThumbnailURL = video.thumbnail
+    if (req.file?.path) {
+        const thumbnailOnCloudinary = await uploadPhotoOnCloudinary(req.file.path);
+        updateFields.thumbnail = thumbnailOnCloudinary?.url;
     }
 
-    const thumbnailOnCloudinary = await uploadPhotoOnCloudinary(thumbnailLocalPath);
+    // If no valid fields are provided, throw an error
+    if (Object.keys(updateFields).length === 0) {
+        throw new ApiError(400, "No valid fields provided for update");
+    }
 
-    const video = await Video.findByIdAndUpdate(
+    // Update the video with the new fields
+    const updatedVideo = await Video.findByIdAndUpdate(
         videoId,
-        // {
-        //   owner: req.user?._id,
-        // },
-        {
-            title: title,
-            description: description,
-            thumbnail: thumbnailOnCloudinary?.url,
-        },
+        { $set: updateFields },
         { new: true }
     );
 
-    if (!video) {
+    if (oldThumbnailURL) {
+        // Extract public ID from the old URL for Cloudinary deletion
+        const publicId = extractPublicIdFromCloudinaryUrl(oldThumbnailURL);
+        await deleteImageFromCloudinary(publicId);
+    }
+
+    if (!updatedVideo) {
         throw new ApiError(
-            404,
-            "Video not found or you are not allowed to update this video"
+            500,
+            "Error while upldating the fields"
         );
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, video, "Video updated successfully"));
+        .json(new ApiResponse(200, updatedVideo, "Video updated successfully"));
 
 })
 
