@@ -134,11 +134,44 @@ const updateVideo = asyncHandler(async (req, res) => {
 const deleteVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     //TODO: delete video
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video id");
+    }
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    // Check if the user is the owner of the video
+    if (String(video.owner) !== String(req.user._id)) {
+        throw new ApiError(403, "You are not allowed to update this video");
+    }
+
+    const videoPublicID = extractPublicIdFromCloudinaryUrl(video.videoFile)
+    const thunbnailPublicID = extractPublicIdFromCloudinaryUrl(video.thumbnail)
+
+    const videoFile = await deleteVideoFromCloudinary(videoPublicID)
+    const thumbnail = await deleteImageFromCloudinary(thunbnailPublicID)
+
+    if (!videoFile && !thumbnail) {
+        throw new ApiError(
+            400,
+            "thumbnail or videoFile is not deleted from cloudinary"
+        );
+    }
+
+    await Video.findByIdAndDelete(videoId);
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, "Video deleted successfully"));
 
 })
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
     const { videoId } = req.params
+
 })
 
 export {
