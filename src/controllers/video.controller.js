@@ -12,17 +12,6 @@ import { stopWords } from "../utils/stopWords.js"
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query = "", sortBy, sortType = "video", userId, order } = req.query
 
-    // const {
-    //     page = 1,
-    //     limit = 10,
-    //     search = "",
-    //     sortBy,
-    //     sortType = "video",
-    //     order,
-    //     userId,
-    //   } = req.query;
-    //TODO: get all videos based on query, sort, pagination
-
     // filter video by given filters
     let filters = { isPublished: true }
     if (isValidObjectId(userId)) filters.owner = new mongoose.Types.ObjectId(userId)
@@ -165,7 +154,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
 
 const publishAVideo = asyncHandler(async (req, res) => {
-    // TODO: get video, upload to cloudinary, create video
     const { title, description, videoFile, thumbnail } = req.body
 
     if (!title) throw new ApiError(400, "Title is Required");
@@ -208,7 +196,6 @@ const publishAVideo = asyncHandler(async (req, res) => {
 
 const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params
-    //TODO: get video by id
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid video id");
 
     const video = await Video.findById(videoId);
@@ -258,7 +245,6 @@ const getVideoById = asyncHandler(async (req, res) => {
 
 const updateVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
-    //TODO: update video details like title, description, thumbnail
     if (!isValidObjectId(videoId)) {
         throw new ApiError(400, "Invalid video id");
     }
@@ -329,7 +315,6 @@ const updateVideo = asyncHandler(async (req, res) => {
 
 const deleteVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params
-    //TODO: delete video
     if (!isValidObjectId(videoId)) {
         throw new ApiError(400, "Invalid video id");
     }
