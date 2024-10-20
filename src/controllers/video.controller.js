@@ -5,13 +5,164 @@ import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { uploadPhotoOnCloudinary, extractPublicIdFromCloudinaryUrl, deleteImageFromCloudinary, uploadVideoOnCloudinary, deleteVideoFromCloudinary } from "../utils/cloudinary.js"
+import { stopWords } from "../utils/stopWords.js"
+
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
+    const { page = 1, limit = 10, query = "", sortBy, sortType = "video", userId, order } = req.query
+
+    // const {
+    //     page = 1,
+    //     limit = 10,
+    //     search = "",
+    //     sortBy,
+    //     sortType = "video",
+    //     order,
+    //     userId,
+    //   } = req.query;
     //TODO: get all videos based on query, sort, pagination
 
+    // filter video by given filters
+    let filters = { isPublished: true }
+    if (isValidObjectId(userId)) filters.owner = new mongoose.Types.ObjectId(userId)
+
+    let pipeline = [
+        {
+            $match: {
+                ...filters,
+            },
+        },
+    ]
+
+    const sort = {}
+    if (query) {
+        const queryWords = query.trim().toLowerCase().replace(/\s+/g, " ").split(" ");  // Remove leading and trailing spaces -> convert to lowercase -> Replace "  "(multiple spaces) to " "(single space) -> split based on " "
+        const filteredWords = queryWords.filter((word) => !stopWords.includes(word));  //  "the", "and", "is", etc.,  are discarded
+        console.log("query: ", queryWords);
+        console.log("filteredWords: ", filteredWords);
+
+
+        // $addFields: Adds a new field (titleMatchWordCount/descriptionMatchWordCount) to each video document.
+        // $size: Counts how many filteredWords match any word in the video’s title.
+        // $filter: Iterates over each word in filteredWords and checks if it's in the video title (split into individual words).
+        // This helps rank videos based on how many words from the search query are in the title.
+        pipeline.push({
+            $addFields: {
+                titleMatchWordCount: {
+                    $size: {
+                        $filter: {
+                            input: filteredWords,
+                            as: "word",
+                            cond: {
+                                $in: ["$$word", { $split: [{ $toLower: "$title" }, " "] }],
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        pipeline.push({
+            $addFields: {
+                descriptionMatchWordCount: {
+                    $size: {
+                        $filter: {
+                            input: filteredWords,
+                            as: "word",
+                            cond: {
+                                $in: [
+                                    "$$word",
+                                    { $split: [{ $toLower: "$description" }, " "] },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        pipeline.push({
+            $match: {
+                $or: [
+                    { titleMatchWordCount: { $gt: 0 } },
+                    { descriptionMatchWordCount: { $gt: 0 } }
+                ]
+            }
+        });
+
+        sort.titleMatchWordCount = -1;  // sorts based on descending order
+        sort.descriptionMatchWordCount = -1;  // sorts based on descending order
+    }
+
+    // sort the documents
+    if (sortBy) {
+        sort[sortBy] = parseInt(order);
+    } else if (!query && !sortBy) {
+        sort["createdAt"] = -1;
+    }
+
+    pipeline.push({
+        $sort: {
+            ...sort,
+        },
+    });
+
+    // fetch owner detail
+    // $lookup: Joins the users collection, fetching the owner's details (e.g., username, fullName, avatar).
+    // $unwind: Converts the array of owners into a single object, because each video only has one owner.
+    pipeline.push(
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    {
+                        $project: {
+                            userName: 1,
+                            fullName: 1,
+                            avatar: 1,
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            $unwind: "$owner",
+        }
+    );
+
+    const videoAggregate = Video.aggregate(pipeline);
+
+    const options = {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+    };
+
+    const allVideos = await Video.aggregatePaginate(videoAggregate, options);
+
+    const { docs, ...pagingInfo } = allVideos;
+
+    if (!docs.length) {
+        return res.status(404).json(
+            new ApiError(404, "No videos found with the selected filters!")
+        );
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                { videos: docs, pagingInfo },
+                "All Query Videos Sent Successfully"
+            )
+        );
+
 })
+
 
 const publishAVideo = asyncHandler(async (req, res) => {
     // TODO: get video, upload to cloudinary, create video
