@@ -9,10 +9,14 @@ const tweetSchema = new Schema(
         content: {
             type: String,
             required: true
+        },
+        tweet_photo: {
+            type: String,
+            required: false
         }
     }, {
-        timestamps: true
-    }
+    timestamps: true
+}
 )
 
 export const Tweet = mongoose.model("Tweet", tweetSchema)

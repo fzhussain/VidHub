@@ -174,10 +174,10 @@ const getVideoComments = asyncHandler(async (req, res) => {
 
 
     const paginatedAllComments = await Comment.aggregatePaginate(pipeline, options)
-    console.log("paginatedAllComments ->", paginatedAllComments)
+    // console.log("paginatedAllComments ->", paginatedAllComments)
 
     const { docs, ...pagingInfo } = paginatedAllComments;
-    console.log("pagingInfo ->", pagingInfo)
+    // console.log("pagingInfo ->", pagingInfo)
 
     if (!docs.length) {
         return res.status(404).json(
