@@ -1,6 +1,7 @@
 import mongoose, { isValidObjectId } from "mongoose"
 import { Video } from "../models/video.model.js"
 import { User } from "../models/user.model.js"
+import { Comment } from "../models/comment.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
@@ -123,6 +124,47 @@ const getAllVideos = asyncHandler(async (req, res) => {
         }
     );
 
+    // Fetch associated comments for each video
+    pipeline.push({
+        $lookup: {
+            from: "comments",
+            localField: "_id",
+            foreignField: "video",
+            as: "comments",
+            pipeline: [
+                { $sort: { createdAt: -1 } }, // Sort comments by newest first if needed
+                // {
+                //     $limit: 5, // Optional: Limit the number of comments per video
+                // },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        as: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    userName: 1,
+                                    fullName: 1,
+                                    avatar: 1,
+                                },
+                            },
+                        ],
+                    },
+                },
+                {
+                    $unwind: "$owner",
+                },
+                {
+                    $project: {
+                        video: 0, // Exclude the 'video' field from each comment
+                    },
+                },
+            ],
+        },
+    });
+
     const videoAggregate = Video.aggregate(pipeline);
 
     const options = {
@@ -198,13 +240,14 @@ const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid video id");
 
-    const video = await Video.findById(videoId);
-    if (!video) throw new ApiError(400, "Video not found");
+    // Fetch the video document
+    const video = await Video.findOne({ _id: videoId, isPublished: true });
+    if (!video) throw new ApiError(404, "Video not found or not published");
 
-    // Check if the video is published
-    if (!video.isPublished) {
-        throw new ApiError(403, "This video is not published and cannot be viewed");
-    }
+    // Fetch associated comments separately
+    const comments = await Comment.find({ video: videoId })
+        .populate("owner", "userName fullName avatar") // Populate owner details if needed
+        .sort({ createdAt: -1 }); // Sort comments if needed, e.g., latest first
 
     let watchHistory;
     if (req.user) {
@@ -238,7 +281,7 @@ const getVideoById = asyncHandler(async (req, res) => {
     }
 
     return res.status(200).json(
-        new ApiResponse(200, video, "Video fetched successfully! View updated and added to user's watch history (if new)")
+        new ApiResponse(200, { video, comments }, "Video fetched successfully! View updated and added to user's watch history (if new)")
     );
 
 })
