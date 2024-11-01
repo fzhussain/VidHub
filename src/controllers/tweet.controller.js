@@ -1,6 +1,7 @@
 import mongoose, { isValidObjectId } from "mongoose"
 import { Tweet } from "../models/tweet.model.js"
 import { User } from "../models/user.model.js"
+import { Subscription } from "../models/subscription.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
@@ -185,6 +186,7 @@ const getUserTweets = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, allTweets, "all tweets send successfully"));
 
 })
+
 const getAllTweets = asyncHandler(async (req, res) => {
     let pipeline = []
     // Sort Tweets by Creation Date 
