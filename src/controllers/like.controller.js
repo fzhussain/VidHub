@@ -187,9 +187,151 @@ const getLikedVideos = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, videos, "videos sent successfully"));
 })
 
+const getLikedTweets = asyncHandler(async (req, res) => {
+    //TODO: get all liked tweets
+    let filters = {
+        tweet: { $ne: null },  // Filter out documents where 'tweet' is null
+        likedBy: new mongoose.Types.ObjectId(req.user?._id),  // Filter by the user who liked the tweet
+    }
+
+    let pipeline = [
+        {
+            $match: {
+                ...filters,  // Match documents based on the filters
+            },
+        },
+    ]
+
+    pipeline.push(
+        {
+            $lookup: {
+                from: "tweets",  // Join with the 'tweets' collection
+                localField: "tweet",  // Field in the current collection
+                foreignField: "_id",  // Field in the 'tweets' collection
+                as: "tweet",  // Output array field
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",  // Join with the 'users' collection
+                            localField: "owner",  // Field in the current collection
+                            foreignField: "_id",  // Field in the 'users' collection
+                            as: "owner",  // Output array field
+                            pipeline: [
+                                {
+                                    $project: {  // Project specific fields
+                                        username: 1,
+                                        fullName: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $unwind: "$owner",  // Unwind the 'owner' array to denormalize
+                    },
+                ],
+            },
+        }
+    )
+
+    pipeline.push(
+        {
+            $unwind: "$tweet",  // Unwind the 'tweet' array to denormalize
+        }
+    )
+
+    pipeline.push(
+        {
+            $group: {
+                _id: "likedBy",  // Group by 'likedBy' field
+                tweets: { $push: "$tweet" },  // Push matched tweets into an array
+            },
+        }
+    )
+
+    const likedTweets = await Like.aggregate(pipeline)
+    const tweets = likedTweets[0]?.tweets || [];
+
+    return res.status(200).json(new ApiResponse(200, tweets, "Tweets sent successfully"));
+});
+
+const getLikedComments = asyncHandler(async (req, res) => {
+    //TODO: get all liked comments
+    let filters = {
+        comment: { $ne: null },  // Filter out documents where 'comment' is null
+        likedBy: new mongoose.Types.ObjectId(req.user?._id),  // Filter by the user who liked the comment
+    }
+
+    let pipeline = [
+        {
+            $match: {
+                ...filters,  // Match documents based on the filters
+            },
+        },
+    ]
+
+    pipeline.push(
+        {
+            $lookup: {
+                from: "comments",  // Join with the 'comments' collection
+                localField: "comment",  // Field in the current collection
+                foreignField: "_id",  // Field in the 'comments' collection
+                as: "comment",  // Output array field
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",  // Join with the 'users' collection
+                            localField: "owner",  // Field in the current collection
+                            foreignField: "_id",  // Field in the 'users' collection
+                            as: "owner",  // Output array field
+                            pipeline: [
+                                {
+                                    $project: {  // Project specific fields
+                                        username: 1,
+                                        fullName: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $unwind: "$owner",  // Unwind the 'owner' array to denormalize
+                    },
+                ],
+            },
+        }
+    )
+
+    pipeline.push(
+        {
+            $unwind: "$comment",  // Unwind the 'comment' array to denormalize
+        }
+    )
+
+
+    pipeline.push(
+        {
+            $group: {
+                _id: "likedBy",  // Group by 'likedBy' field
+                comments: { $push: "$comment" },  // Push matched comments into an array
+            },
+        }
+    )
+
+    const likedComments = await Like.aggregate(pipeline)
+    const comments = likedComments[0]?.comments || [];
+
+    return res.status(200).json(new ApiResponse(200, comments, "Comments sent successfully"));
+});
+
+
 export {
     toggleCommentLike,
     toggleTweetLike,
     toggleVideoLike,
-    getLikedVideos
+    getLikedVideos,
+    getLikedTweets,
+    getLikedComments
 }
