@@ -2,6 +2,8 @@ import mongoose, { isValidObjectId } from "mongoose"
 import { Video } from "../models/video.model.js"
 import { User } from "../models/user.model.js"
 import { Comment } from "../models/comment.model.js"
+import { Like } from "../models/like.model.js"
+import { Dislike } from "../models/dislike.model.js"
 import { ApiError } from "../utils/ApiError.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
@@ -124,6 +126,47 @@ const getAllVideos = asyncHandler(async (req, res) => {
         }
     );
 
+    // Add lookups for likes and dislikes
+    pipeline.push(
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "video",
+                as: "likes",
+            },
+        },
+        {
+            $lookup: {
+                from: "dislikes",
+                localField: "_id",
+                foreignField: "video",
+                as: "dislikes",
+            },
+        }
+    );
+
+    // Add fields for total likes and dislikes
+    pipeline.push(
+        {
+            $addFields: {
+                totalLikes: { $size: "$likes" },
+                totalDislikes: { $size: "$dislikes" },
+            },
+        }
+    );
+
+    // Remove likes and dislikes arrays from the final output
+    pipeline.push(
+        {
+            $project: {
+                likes: 0,
+                dislikes: 0,
+            },
+        }
+    );
+
+
     // Fetch associated comments for each video
     pipeline.push({
         $lookup: {
@@ -161,9 +204,39 @@ const getAllVideos = asyncHandler(async (req, res) => {
                         video: 0, // Exclude the 'video' field from each comment
                     },
                 },
+                {
+                    $lookup: {
+                        from: "likes",
+                        localField: "_id",
+                        foreignField: "comment",
+                        as: "likes",
+                    },
+                },
+                {
+                    $lookup: {
+                        from: "dislikes",
+                        localField: "_id",
+                        foreignField: "comment",
+                        as: "dislikes",
+                    },
+                },
+                {
+                    $addFields: {
+                        totalLikes: { $size: "$likes" },
+                        totalDislikes: { $size: "$dislikes" },
+                    },
+                },
+                {
+                    $project: {
+                        video: 0,
+                        likes: 0,
+                        dislikes: 0,
+                    },
+                }
             ],
         },
     });
+
 
     const videoAggregate = Video.aggregate(pipeline);
 
@@ -175,6 +248,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
     const allVideos = await Video.aggregatePaginate(videoAggregate, options);
 
     const { docs, ...pagingInfo } = allVideos;
+    // Get likes, dislikes of the video
 
     if (!docs.length) {
         return res.status(404).json(
@@ -247,7 +321,17 @@ const getVideoById = asyncHandler(async (req, res) => {
     // Fetch associated comments separately
     const comments = await Comment.find({ video: videoId })
         .populate("owner", "userName fullName avatar") // Populate owner details if needed
-        .sort({ createdAt: -1 }); // Sort comments if needed, e.g., latest first
+        .sort({ createdAt: -1 })
+        .lean(); // Sort comments if needed, e.g., latest first
+
+    // Fetch likes and dislikes for each comment
+    for (let comment of comments) {
+        const totalLikes = await Like.countDocuments({ comment: comment._id });
+        const totalDislikes = await Dislike.countDocuments({ comment: comment._id });
+        comment.totalLikes = totalLikes;
+        comment.totalDislikes = totalDislikes;
+    }
+    console.log("comments ->", comments)
 
     let watchHistory;
     if (req.user) {
@@ -279,9 +363,13 @@ const getVideoById = asyncHandler(async (req, res) => {
         }
 
     }
+    // Get total likes and dislikes of the video
+    const totalLikes = await Like.countDocuments({ video: videoId });
+    const totalDislikes = await Dislike.countDocuments({ video: videoId });
+
 
     return res.status(200).json(
-        new ApiResponse(200, { video, comments }, "Video fetched successfully! View updated and added to user's watch history (if new)")
+        new ApiResponse(200, { video, totalLikes, totalDislikes, comments }, "Video fetched successfully! View updated and added to user's watch history (if new)")
     );
 
 })
