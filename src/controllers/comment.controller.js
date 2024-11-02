@@ -7,104 +7,59 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 import { asyncHandler } from "../utils/asyncHandler.js"
 
 const getVideoComments = asyncHandler(async (req, res) => {
-    //TODO: get all comments for a video
-    const { videoId } = req.params
-    const { page = 1, limit = 10 } = req.query
+    const { videoId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
 
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid VideoId");
 
-    const options = {
-        page,
-        limit,
-    };
-
     const video = await Video.findById(videoId);
+    if (!video) throw new ApiError(404, "Video not found");
 
+    const options = { page, limit };
 
-    const filters = {
-        video: new mongoose.Types.ObjectId(videoId),
-    }
-    // Finds all comments associated with the specified videoId.
-    let pipeline = [
+    const pipeline = [
+        // Match comments for the specified video
+        { $match: { video: new mongoose.Types.ObjectId(videoId) } },
+
+        // Sort comments by creation date
+        { $sort: { createdAt: -1 } },
+
+        // Lookup for likes and dislikes
         {
-            $match: {
-                ...filters,
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "comment",
+                as: "likes",
             },
         },
-    ]
-    // Sorts comments in descending order by createdAt, so the newest comments come first.
-    pipeline.push({
-        $sort: {
-            createdAt: -1,
+        {
+            $lookup: {
+                from: "dislikes",
+                localField: "_id",
+                foreignField: "comment",
+                as: "dislikes",
+            },
         },
-    })
-    // Looks up documents in the likes collection that match each comment’s _id. Filters to only include records where liked is true. Groups these by liked status, collecting likedBy users (those who liked the comment) into an array called owners.
-    pipeline.push({
-        $lookup: {
-            from: "likes",
-            localField: "_id",
-            foreignField: "comment",
-            as: "likes",
-            pipeline: [
-                {
-                    $match: {
-                        liked: true,
-                    },
-                },
-                {
-                    $group: {
-                        _id: "liked",
-                        owners: { $push: "$likedBy" },
-                    },
-                },
-            ],
-        },
-    })
 
-    // Similar to the likes lookup, but filters for liked: false to get users who disliked the comment.
-    pipeline.push({
-        $lookup: {
-            from: "likes",
-            localField: "_id",
-            foreignField: "comment",
-            as: "dislikes",
-            pipeline: [
-                {
-                    $match: {
-                        liked: false,
-                    },
+        // Add fields for total likes/dislikes and like/dislike status
+        {
+            $addFields: {
+                totalLikes: { $size: "$likes" },
+                totalDislikes: { $size: "$dislikes" },
+                isLiked: {
+                    $in: [req.user?._id, "$likes.likedBy"],
                 },
-                {
-                    $group: {
-                        _id: "liked",
-                        owners: { $push: "$likedBy" },
-                    },
+                isDisLiked: {
+                    $in: [req.user?._id, "$dislikes.dislikedBy"],
                 },
-            ],
+                isLikedByVideoOwner: {
+                    $in: [video.owner, "$likes.likedBy"],
+                },
+            },
         },
-    })
-    //If the likes array has any items, sets likes to the array of user IDs from owners. If not, sets likes to an empty array. Does the same for dislikes.
 
-    pipeline.push({
-        $addFields: {
-            likes: {
-                $cond: {
-                    if: { $gt: [{ $size: "$likes" }, 0] },
-                    then: { $first: "$likes.owners" },
-                    else: [],
-                },
-            },
-            dislikes: {
-                $cond: {
-                    if: { $gt: [{ $size: "$dislikes" }, 0] },
-                    then: { $first: "$dislikes.owners" },
-                    else: [],
-                },
-            },
-        },
-    })
-    // Joins the users collection to fetch the owner’s details (full name, username, avatar, and ID). Uses $unwind to flatten the array created by $lookup since each comment has only one owner.
-    pipeline.push(
+        // Lookup for owner details and unwind the result
         {
             $lookup: {
                 from: "users",
@@ -123,79 +78,38 @@ const getVideoComments = asyncHandler(async (req, res) => {
                 ],
             },
         },
-        { $unwind: "$owner" }
-    )
-    // $project to specify the fields to include in the output
-    pipeline.push({
-        $project: {
-            content: 1,
-            owner: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            isOwner: {
-                $cond: {
-                    if: { $eq: [req.user?._id, "$owner._id"] },
-                    then: true,
-                    else: false,
-                },
-            },
-            likesCount: { $size: "$likes" },
-            disLikesCount: { $size: "$dislikes" },
-            isLiked: {
-                $cond: {
-                    if: { $in: [req.user?._id, "$likes"] },
-                    then: true,
-                    else: false,
-                },
-            },
-            isDisLiked: {
-                $cond: {
-                    if: { $in: [req.user?._id, "$dislikes"] },
-                    then: true,
-                    else: false,
-                },
-            },
-            isLikedByVideoOwner: {
-                $cond: {
-                    if: { $in: [video.owner, "$likes"] },
-                    then: true,
-                    else: false,
-                },
+        { $unwind: "$owner" },
+
+        // Project the fields we want in the output
+        {
+            $project: {
+                content: 1,
+                owner: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                totalLikes: 1,
+                totalDislikes: 1,
+                isLiked: 1,
+                isDisLiked: 1,
+                isLikedByVideoOwner: 1,
+                isOwner: { $eq: [req.user?._id, "$owner._id"] },
             },
         },
-    })
+    ];
 
-    const allComments = await Comment.aggregate(pipeline)
-    if (!allComments) throw new ApiError(400, "No Comments Found")
+    // Paginate the comments
+    const paginatedComments = await Comment.aggregatePaginate(pipeline, options);
 
-    // return res
-    //     .status(200)
-    //     .json(new ApiResponse(200, allComments, "All comments Sent"));
-
-
-    const paginatedAllComments = await Comment.aggregatePaginate(pipeline, options)
-    // console.log("paginatedAllComments ->", paginatedAllComments)
-
-    const { docs, ...pagingInfo } = paginatedAllComments;
-    // console.log("pagingInfo ->", pagingInfo)
-
-    if (!docs.length) {
-        return res.status(404).json(
-            new ApiError(404, "No comments found!")
-        );
+    const { docs: comments, ...pagingInfo } = paginatedComments;
+    if (!comments.length) {
+        return res.status(404).json(new ApiError(404, "No comments found!"));
     }
 
     return res
         .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                { comments: docs, pagingInfo },
-                "All Comments Sent Successfully"
-            )
-        );
+        .json(new ApiResponse(200, { comments, pagingInfo }, "All Comments Sent Successfully"));
+});
 
-})
 
 const addComment = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
