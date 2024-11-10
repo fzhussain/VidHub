@@ -9,7 +9,7 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 
 const toggleVideoDisLike = asyncHandler(async (req, res) => {
     const { videoId } = req.params
-    //TODO: toggle like on video
+
     if (!isValidObjectId(videoId)) {
         throw new ApiError(400, "invalid videoId");
     }
@@ -46,7 +46,7 @@ const toggleVideoDisLike = asyncHandler(async (req, res) => {
 
 const toggleCommentDisLike = asyncHandler(async (req, res) => {
     const { commentId } = req.params
-    //TODO: toggle like on comment
+
     if (!isValidObjectId(commentId)) throw new ApiError(400, "invalid commentId");
 
     const comment = await Comment.findById(commentId);
@@ -79,7 +79,7 @@ const toggleCommentDisLike = asyncHandler(async (req, res) => {
 
 const toggleTweetDisLike = asyncHandler(async (req, res) => {
     const { tweetId } = req.params
-    //TODO: toggle like on tweet
+
 
     if (!isValidObjectId(tweetId)) throw new ApiError(400, "invalid tweetId");
     const tweet = await Tweet.findById(tweetId);
@@ -112,7 +112,7 @@ const toggleTweetDisLike = asyncHandler(async (req, res) => {
 )
 
 const getDisLikedVideos = asyncHandler(async (req, res) => {
-    //TODO: get all liked videos
+
 
     let filters = {
         video: { $ne: null },  // Filter out documents where 'video' is null
@@ -192,7 +192,7 @@ const getDisLikedVideos = asyncHandler(async (req, res) => {
 })
 
 const getDisLikedTweets = asyncHandler(async (req, res) => {
-    //TODO: get all liked tweets
+
     let filters = {
         tweet: { $ne: null },  // Filter out documents where 'tweet' is null
         dislikedBy: new mongoose.Types.ObjectId(req.user?._id),  // Filter by the user who liked the tweet
@@ -261,7 +261,7 @@ const getDisLikedTweets = asyncHandler(async (req, res) => {
 });
 
 const getDisLikedComments = asyncHandler(async (req, res) => {
-    //TODO: get all liked comments
+
     let filters = {
         comment: { $ne: null },  // Filter out documents where 'comment' is null
         dislikedBy: new mongoose.Types.ObjectId(req.user?._id),  // Filter by the user who liked the comment

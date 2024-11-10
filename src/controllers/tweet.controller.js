@@ -9,7 +9,7 @@ import { uploadPhotoOnCloudinary, deleteImageFromCloudinary, extractPublicIdFrom
 
 
 const createTweet = asyncHandler(async (req, res) => {
-    //TODO: create tweet    
+
     const { content, tweet_photo } = req.body;
     if (!content) throw new ApiError(400, "Tweet content required");
 
@@ -398,7 +398,7 @@ const getAllUserFeedTweets = asyncHandler(async (req, res) => {
 
 
 const updateTweet = asyncHandler(async (req, res) => {
-    //TODO: update tweet
+
     const { tweetId } = req.params;
     const { content } = req.body;
     if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
@@ -447,7 +447,7 @@ const updateTweet = asyncHandler(async (req, res) => {
 
 
 const deleteTweet = asyncHandler(async (req, res) => {
-    //TODO: delete tweet
+
     const { tweetId } = req.params;
 
     if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
