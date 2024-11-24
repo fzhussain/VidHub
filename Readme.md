@@ -1,4 +1,4 @@
-# VidHub: a YouTube Clone
+# VidHub: A YouTube Clone
 
 This project was created in collaboration with the YouTuber **Chai aur Code** to learn and practice backend development using JavaScript.
 
